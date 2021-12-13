@@ -56,7 +56,7 @@ def normalize(rrf):
 
 def Get_p_(p_hat,r,c_rff_12,c_12):
     p_ = np.empty_like(p_hat)
-    p_hat[0] = np.dot(np.dot(c_rff_12,p_hat[2]),c_rff_12)
+    p_hat[0] = np.dot(np.dot(c_rff_12,p_hat[0]),c_rff_12)
     p_hat[2] = np.dot(np.dot(c_12,p_hat[2]),c_12)
     for i in range(len(p_hat)):
         u, s, vh = np.linalg.svd(p_hat[i], full_matrices=True)
@@ -131,7 +131,7 @@ def Kernel(x,y,G,w_orf,w_sorf):
 # random Fourier feature 
 def RFF_1(x,w,n_raw,n_feature):
     rff = np.zeros((n_raw,n_feature))
-    rff[0,:]  = np.sqrt(2.0/n_feature)*(np.sin(w*x[0])) 
+    rff[0,:]  = (np.sin(w*x[0])) # np.sqrt(2.0/n_feature)*
     
     # q, r = np.linalg.qr(rff_x)
     # print("q",q)
@@ -214,15 +214,13 @@ def SORF(x,w_sorf):
     return sorf
 
 # traj = brownian_motion(10000)
-traj, gt_p = get_mc_traj(5000)
+traj, p_gt = get_mc_traj(50000)
 print("random walk in [1, 2, 3... ,9] traj:",traj)
 n_state = 9
 r = 4 # rank
 n_feature_list = [256] # n features
 n_raw = 1 # n-dimensional raw data
 step_list = [1]
-x_list = [np.array([1]),np.array([2]),np.array([3])]
-y_list = [np.array([1]),np.array([2]),np.array([3])]
 
 for n_feature in n_feature_list:
     for step in step_list:
@@ -251,7 +249,6 @@ for n_feature in n_feature_list:
                 rff_1_y = RFF_1(y,W ,n_raw, n_feature)
                 rff_2_x = RFF_2(x, G)
                 rff_2_y = RFF_2(y, G)
-
                 orf_x  = ORF(x,w_orf)            
                 orf_y = ORF(y,w_orf)                
                 sorf_x = SORF(x,w_sorf)                
@@ -259,23 +256,28 @@ for n_feature in n_feature_list:
                 
                 p_rff_1 = np.dot(np.dot(np.dot(np.dot(rff_1_x,c_rff_12), p_[0]),c_rff_12),rff_1_y.transpose())
                 p_rff_2 = np.dot(np.dot(rff_2_x, p_[1]),rff_2_y.transpose())
-                p_orf = np.dot(np.dot(np.dot(np.dot(orf_x,c_12), p_[0]),c_12),orf_y.transpose())
-                p_sorf = np.dot(np.dot(sorf_x, p_[1]),sorf_y.transpose())
+                p_orf = np.dot(np.dot(np.dot(np.dot(orf_x,c_12), p_[2]),c_12),orf_y.transpose())
+                p_sorf = np.dot(np.dot(sorf_x, p_[3]),sorf_y.transpose())
                 
-                # normalize
-                
-
                 p_est[0,i,j] = p_rff_1
                 p_est[1,i,j] = p_rff_2
                 p_est[2,i,j] = p_orf
                 p_est[3,i,j] = p_sorf
-        # normalize conditional prob that sum to 1  
-        # print("sum",p_est[0].sum(axis=0))
-        # sum = p_est[0].sum(axis=1)
-        # p_est[0] = p_est[0]/sum
-        # print(p_est[0])
-        # p_est[0] = p_est[0]/p_est[0].sum(axis=1)
-        # p_est[1] = p_est[1]/p_est[1].sum(axis=1)
-        # print("p_est",p_est)
+        # normalize conditional prob 
+        # print("sum",p_est[0].sum(axis=1))
+        print("p_est",p_est[0])  
+        for j in range(4):
+            sum = p_est[j].sum(axis=1) 
+            for i in range(len(p_est[j])):
+                # print("before:",p_est[j,i])
+                # print("sum i",sum[i])
+                p_est[j,i] = p_est[j,i]/sum[i]
+                # print("after:",p_est[j,i])
+        # print(p_est)
+        print("normalized p_est",p_est[0])
+
+        err = np.absolute(p_gt - p_est)/p_gt
+        print("error",err)
+
                 
 
