@@ -54,9 +54,10 @@ def normalize(rrf):
     norm_rrf = rrf/norm
     return norm_rrf
 
-def Get_p_(p_hat,r,c_12):
+def Get_p_(p_hat,r,c_rff_12,c_12):
     p_ = np.empty_like(p_hat)
-    p_hat[0] = np.dot(np.dot(c_12,p_hat[0]),c_12)
+    p_hat[0] = np.dot(np.dot(c_rff_12,p_hat[2]),c_rff_12)
+    p_hat[2] = np.dot(np.dot(c_12,p_hat[2]),c_12)
     for i in range(len(p_hat)):
         u, s, vh = np.linalg.svd(p_hat[i], full_matrices=True)
         u_ = u[:,:r]
@@ -72,7 +73,7 @@ def Get_p_(p_hat,r,c_12):
     return p_
 
 def Get_P_hat(traj,G,n_feature, w_orf, w_sorf,step=1):
-    avg = np.zeros(shape=(2,n_feature,n_feature))
+    avg = np.zeros(shape=(4,n_feature,n_feature))
     i = 0
     counter = 0
     # print(len(traj))
@@ -81,12 +82,12 @@ def Get_P_hat(traj,G,n_feature, w_orf, w_sorf,step=1):
             print("current step",i)
         x = traj[:,i]
         y = traj[:,i+step]
-        k_orf, k_sorf = Kernel(x,y,G, w_orf, w_sorf)
+        k_rff_1, k_rff_2, k_orf, k_sorf = Kernel(x,y,G, w_orf, w_sorf)
 #         print("k_orf",k_orf)
-        # avg[0] += k_rff_1
-        # avg[0] += k_rff_2
-        avg[0] += k_orf
-        avg[1] += k_sorf
+        avg[0] += k_rff_1
+        avg[1] += k_rff_2
+        avg[2] += k_orf
+        avg[3] += k_sorf
         
         i += step
         counter += 1
@@ -97,14 +98,15 @@ def Get_P_hat(traj,G,n_feature, w_orf, w_sorf,step=1):
     return avg
 
 def Kernel(x,y,G,w_orf,w_sorf):
-    # rff_1_x = RFF_1(x,w,n)
-    # rff_1_y = RFF_1(y,w,n)
-    # k_rff_1 = np.dot(rff_1_x.transpose(),rff_1_y)
+    rff_1_x = RFF_1(x,w,n_raw,n_feature)
+    rff_1_y = RFF_1(y,w,n_raw,n_feature)
+    k_rff_1 = np.dot(rff_1_x.transpose(),rff_1_y)
     # print("rff_1_x", rff_1_x)
     # print("rff_1_y.shape", rff_1_y.shape)
-    # rff_2_x = RFF_2(x,G)
-    # rff_2_y = RFF_2(y,G)
-    # k_rff_2 = np.dot(rff_2_x.transpose(),rff_2_y)
+    
+    rff_2_x = RFF_2(x,G)
+    rff_2_y = RFF_2(y,G)
+    k_rff_2 = np.dot(rff_2_x.transpose(),rff_2_y)
     # print("rff_2_x", rff_2_x)
     # print("rff_2_y.shape", rff_2_y.shape)
 
@@ -124,22 +126,38 @@ def Kernel(x,y,G,w_orf,w_sorf):
     # print("k_rff_2", k_rff_2)
     # print("k_orf", k_orf)
     # print("k_sorf", k_sorf)
-    return  k_orf, k_sorf  # n * n
+    return  k_rff_1,k_rff_2,k_orf, k_sorf  
 
 # random Fourier feature 
 def RFF_1(x,w,n_raw,n_feature):
     rff = np.zeros((n_raw,n_feature))
     rff[0,:]  = np.sqrt(2.0/n_feature)*(np.sin(w*x[0])) 
+    
     # q, r = np.linalg.qr(rff_x)
     # print("q",q)
     # print("r",r)
-    rff[1,:] = np.sqrt(2.0/n_feature)*(np.cos(w*x[1]))  # D*1 
+    if n_raw == 2:
+        rff[1,:] = np.sqrt(2.0/n_feature)*(np.cos(w*x[1]))  # D*1 
     return rff  #D*2
 
 def RFF_2(x,G):
     rff = np.reshape(np.dot(G,x.transpose()),(1,-1))
     rff = normalize(rff)
     return rff # 2*D
+
+def get_W(n_raw,n_feature):
+    W = 2*np.pi*np.random.choice(2000,size=(n_raw,n_feature), replace=False)
+    sum = 0
+
+    for j in range(9):
+        sum += np.sin(W*j)**2
+    
+    norm = np.sqrt(sum)
+    
+    c_12 = np.diag(1/norm.reshape(n_feature))
+    # print("c_12",c_12)
+    # print("W",W)
+    return c_12, W
 
 def get_w_orf(n_raw,n_feature,G):
     w_orf = np.zeros((n_feature,n_raw))
@@ -196,7 +214,7 @@ def SORF(x,w_sorf):
     return sorf
 
 # traj = brownian_motion(10000)
-traj, gt_p = get_mc_traj(50000)
+traj, gt_p = get_mc_traj(5000)
 print("random walk in [1, 2, 3... ,9] traj:",traj)
 n_state = 9
 r = 4 # rank
@@ -212,35 +230,52 @@ for n_feature in n_feature_list:
         print("step:",step)
         # w for rff_1
         w = np.random.normal(loc=0.0, scale=1.0, size=n_feature) # n * 1
+        c_rff_12 , W = get_W(n_raw , n_feature)
         # gaussian for rff_2
         G = np.random.normal(loc=0.0, scale=1.0, size=(n_feature,n_raw))
         c_12 , w_orf = get_w_orf(n_raw,n_feature,G)
         w_sorf = get_w_sorf(n_raw,n_feature)
         p_hat = Get_P_hat(traj, G ,n_feature, w_orf, w_sorf,step)
         print("p_hat",p_hat) 
-        p_ = Get_p_(p_hat,r,c_12)
+        p_ = Get_p_(p_hat,r,c_rff_12,c_12)
 
         # # print("p_hat:",p_hat)
         print("p_:",p_)
-        p_est = np.zeros(shape=(2,n_state,n_state))
+        p_est = np.zeros(shape=(4,n_state,n_state))
         for i in range(n_state):
             for j in range(n_state):
                 x = np.array([i+1])
-                y = np.array([j+1])                
+                y = np.array([j+1])
+
+                rff_1_x = RFF_1(x,W ,n_raw, n_feature)
+                rff_1_y = RFF_1(y,W ,n_raw, n_feature)
+                rff_2_x = RFF_2(x, G)
+                rff_2_y = RFF_2(y, G)
+
                 orf_x  = ORF(x,w_orf)            
                 orf_y = ORF(y,w_orf)                
                 sorf_x = SORF(x,w_sorf)                
-                sorf_y = SORF(y,w_sorf)               
-                # p_rff_1 = np.dot(np.dot(rff_1_x, p_[0]),rff_1_y.transpose())
-                # p_rff_2 = np.dot(np.dot(rff_2_x, p_[0]),rff_2_y.transpose())
+                sorf_y = SORF(y,w_sorf)            
+                
+                p_rff_1 = np.dot(np.dot(np.dot(np.dot(rff_1_x,c_rff_12), p_[0]),c_rff_12),rff_1_y.transpose())
+                p_rff_2 = np.dot(np.dot(rff_2_x, p_[1]),rff_2_y.transpose())
                 p_orf = np.dot(np.dot(np.dot(np.dot(orf_x,c_12), p_[0]),c_12),orf_y.transpose())
                 p_sorf = np.dot(np.dot(sorf_x, p_[1]),sorf_y.transpose())
                 
-                p_est[0,i,j] = p_orf
-                p_est[1,i,j] = p_sorf
-        # normalize conditional prob that sum to 1        
-        p_est[0] = p_est[0]/p_est[0].sum(axis=1)
-        p_est[1] = p_est[1]/p_est[1].sum(axis=1)
-        print("p_est",p_est)
+                # normalize
+                
+
+                p_est[0,i,j] = p_rff_1
+                p_est[1,i,j] = p_rff_2
+                p_est[2,i,j] = p_orf
+                p_est[3,i,j] = p_sorf
+        # normalize conditional prob that sum to 1  
+        # print("sum",p_est[0].sum(axis=0))
+        # sum = p_est[0].sum(axis=1)
+        # p_est[0] = p_est[0]/sum
+        # print(p_est[0])
+        # p_est[0] = p_est[0]/p_est[0].sum(axis=1)
+        # p_est[1] = p_est[1]/p_est[1].sum(axis=1)
+        # print("p_est",p_est)
                 
 
