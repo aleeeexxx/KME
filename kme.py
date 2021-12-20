@@ -4,6 +4,47 @@ import pandas as pd
 import scipy.linalg
 # import matplotlib.pyplot as plt
 # import scipy.linalg.hadamard as hadamard
+def get_k_mc_traj(n_traj=3,n_state=3,len=10):
+    
+    p = np.ndarray([n_traj,n_state,n_state])
+    p_gt = np.ndarray([n_traj,n_state,n_state])
+    
+    for k in range(n_traj):
+        for i in range(n_state):
+            for j in range(n_state):
+                temp = np.random.rand()
+                if temp > 0.5:
+                    p_gt[k,i,j] = 1
+                else:
+                    p_gt[k,i,j] = 0
+                
+                if j == 0:
+                    p[k,i,j] = p_gt[k,i,j]
+                else:
+                    p[k,i,j] = p[k,i,j-1] + p_gt[k,i,j]
+            # print(" p[k,i,:]", p[k,i,:])   
+            p[k,i,:] = p[k,i,:] / p[k,i,n_state-1]
+            # print(" p[k,i,:]", p[k,i,:])   
+        # print("k",k) 
+        # print("p_gt",p_gt[k])   
+
+        p_gt[k] = (p_gt[k].T/p_gt[k].sum(axis=1)).T
+        # print("p_gt",p_gt[k])
+    
+    # initial state
+    traj = np.zeros([n_traj,len])
+    counter = 0
+    for k in range(n_traj):
+        s = np.random.randint(n_state)
+        traj[k,0] = s + 1
+        for i in range(1,len):      
+            # print("p[k]", p[k])
+            s = get_next_state(s,p[k])
+            traj[k,i] = s + 1
+            # if s != 0:
+            #     counter += 1
+    #         print(counter)
+    return traj, p_gt
 
 def get_mc_traj(len):
     n_state = 9 # 1,2,3...9
@@ -18,13 +59,13 @@ def get_mc_traj(len):
                 p_gt[i,j] = np.exp(-(i+1))*np.exp(-(j+1)) + 2*(1-np.exp(-(i+1)))*np.exp(-2*(j+1)) #
                 p[i,j] = p[i,j-1] + p_gt[i,j]
         p[i,:] = p[i,:] / p[i,n_state-1]
-    p_gt = p_gt/p_gt.sum(axis=1)
+    p_gt = (p_gt.T/p_gt.sum(axis=1)).T
     print("p_gt",p_gt)
-    traj = np.ndarray([1,len])
-    s = 0
-    traj[0] = s
+    traj = np.zeros([1,len])
+    s = np.random.randint(n_state)
+    traj[:,0] = s + 1
     counter = 0
-    for i in range(len):
+    for i in range(1,len):
         s = get_next_state(s,p)
         traj[:,i] = s + 1
         if s is not 0:
@@ -214,18 +255,19 @@ def SORF(x,w_sorf):
     return sorf
 
 # traj = brownian_motion(10000)
-traj, p_gt = get_mc_traj(50000)
+traj, p_gt = get_mc_traj(10000)
 print("random walk in [1, 2, 3... ,9] traj:",traj)
 n_state = 9
 r = 4 # rank
 n_feature_list = [256] # n features
 n_raw = 1 # n-dimensional raw data
+
 step_list = [1]
 
 for n_feature in n_feature_list:
     for step in step_list:
         print("n feature:",n_feature)
-        print("step:",step)
+        print("step length:",step)
         # w for rff_1
         w = np.random.normal(loc=0.0, scale=1.0, size=n_feature) # n * 1
         c_rff_12 , W = get_W(n_raw , n_feature)
@@ -234,11 +276,11 @@ for n_feature in n_feature_list:
         c_12 , w_orf = get_w_orf(n_raw,n_feature,G)
         w_sorf = get_w_sorf(n_raw,n_feature)
         p_hat = Get_P_hat(traj, G ,n_feature, w_orf, w_sorf,step)
-        print("p_hat",p_hat) 
+        print("p_hat",p_hat[0]) 
         p_ = Get_p_(p_hat,r,c_rff_12,c_12)
 
         # # print("p_hat:",p_hat)
-        print("p_:",p_)
+        print("p_:",p_[0])
         p_est = np.zeros(shape=(4,n_state,n_state))
         for i in range(n_state):
             for j in range(n_state):
@@ -265,19 +307,17 @@ for n_feature in n_feature_list:
                 p_est[3,i,j] = p_sorf
         # normalize conditional prob 
         # print("sum",p_est[0].sum(axis=1))
-        print("p_est",p_est[0])  
+        # print("p_est",p_est[0])  
+    
         for j in range(4):
             sum = p_est[j].sum(axis=1) 
-            for i in range(len(p_est[j])):
-                # print("before:",p_est[j,i])
-                # print("sum i",sum[i])
-                p_est[j,i] = p_est[j,i]/sum[i]
-                # print("after:",p_est[j,i])
+            p_est[j] = (p_est[j].T/sum[i]).T
+        # print("after:",p_est[j,i])
         # print(p_est)
-        print("normalized p_est",p_est[0])
+        print("p_est",p_est)
 
-        err = np.absolute(p_gt - p_est)/p_gt
+        a = (p_gt - p_est[0])**2
+        norm = np.sqrt(a.sum(axis=1))
+        print("norm",norm)
+        err = ((p_gt - p_est[0]).T/norm).T
         print("error",err)
-
-                
-
