@@ -21,8 +21,6 @@ def get_gt(n_traj=10,n_state=3,len=10):
             else:
                 p[i,j] = p[i,j-1] + p_gt[i,j]
 
-
-    
     # initial state
     traj = np.zeros([n_traj,len])
     for k in range(n_traj):
@@ -36,7 +34,6 @@ def get_gt(n_traj=10,n_state=3,len=10):
             #     counter += 1
     #         print(counter)
     return traj , p_gt
-
 
 def get_p_k(n_traj=3,n_state=3):
     p = np.zeros([n_traj,n_state,n_state])
@@ -54,9 +51,7 @@ def get_p_k(n_traj=3,n_state=3):
                     p[k,i,j] = p_k[k,i,j]
                 else:
                     p[k,i,j] = p[k,i,j-1] + p_k[k,i,j]
-
             p[k,i,:] = p[k,i,:] / p[k,i,n_state-1] 
-
         p_k[k] = (p_k[k].T/p_k[k].sum(axis=1)).T
         p_k[k] = np.where(np.isnan(p_k[k]), 0, p_k[k])
         # print("p_gt",p_gt[k])
@@ -106,36 +101,66 @@ def get_p_hat(alpha,p_k):
         sum += p_k[i]*alpha[i]
     return sum
 
-def get_error(p_hat,p_gt):
+def get_error(p_hat,Frobenius_gt):
     delta = p_hat - p_gt
-    print("delta",delta)
-    norm = np.linalg.norm(delta)
-    print("norm",norm)
-    error = delta/norm
-    # print("error",error)
+#     print("delta",delta)
+    Frobenius_delta = np.linalg.norm(delta)
+    
+#     print("Frobenius_gt",Frobenius_gt)
+    error = Frobenius_delta/Frobenius_gt
+    
     return error
-
-
 
 traj, p_gt = get_gt(n_traj=1000,n_state=5,len=3000)
 print("p_gt",p_gt)
+Frobenius_gt = np.linalg.norm(p_gt)
+print("Frobenius_gt",Frobenius_gt)
 
-p_k = get_p_k(n_traj=300,n_state=5)
-# print("p_k",p_k)
-# print("traj",traj)
+k_list = np.linspace(100, 500, 5, dtype=int,endpoint=True)
+print("k_list",k_list)
+error_list = []
 
-# p_k[3] = p_gt
-# print("p_k",p_k)
-
+p_k = get_p_k(n_traj=10,n_state=5)
 p_bar = get_p_bar(traj, n_state=5)
-print("p_bar",p_bar)
-
 alpha = get_alpha(p_bar,p_k)
-# print("alpha", alpha)
-
 p_hat = get_p_hat(alpha,p_k)
-print("p_hat",p_hat)
+error = get_error(p_hat,Frobenius_gt)
+print("error",error)
+error_list.append(error)
+print(error_list)
 
-print("p_gt",p_gt)
-error = get_error(p_hat,p_gt)
-print("error in Frobenius norm",error)
+p_k = get_p_k(n_traj=50,n_state=5)
+p_bar = get_p_bar(traj, n_state=5)
+alpha = get_alpha(p_bar,p_k)
+p_hat = get_p_hat(alpha,p_k)
+error = get_error(p_hat,Frobenius_gt)
+print("error",error)
+error_list.append(error)
+print(error_list)
+
+p_k = get_p_k(n_traj=100,n_state=5)
+p_bar = get_p_bar(traj, n_state=5)
+alpha = get_alpha(p_bar,p_k)
+p_hat = get_p_hat(alpha,p_k)
+error = get_error(p_hat,Frobenius_gt)
+print("error",error)
+error_list.append(error)
+print(error_list)
+
+p_k = get_p_k(n_traj=200,n_state=5)
+p_bar = get_p_bar(traj, n_state=5)
+alpha = get_alpha(p_bar,p_k)
+p_hat = get_p_hat(alpha,p_k)
+error = get_error(p_hat,Frobenius_gt)
+print("error",error)
+error_list.append(error)
+print(error_list)
+
+p_k = get_p_k(n_traj=400,n_state=5)
+p_bar = get_p_bar(traj, n_state=5)
+alpha = get_alpha(p_bar,p_k)
+p_hat = get_p_hat(alpha,p_k)
+error = get_error(p_hat,Frobenius_gt)
+print("error",error)
+error_list.append(error)
+print(error_list)
